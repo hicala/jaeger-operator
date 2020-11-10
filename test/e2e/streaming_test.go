@@ -196,7 +196,7 @@ func jaegerStreamingDefinition(namespace string, name string) *v1.Jaeger {
 				}),
 			},
 			Storage: v1.JaegerStorageSpec{
-				Type: "elasticsearch",
+				Type: v1.JaegerESStorage,
 				Options: v1.NewOptions(map[string]interface{}{
 					"es.server-urls": esServerUrls,
 				}),
@@ -209,9 +209,6 @@ func jaegerStreamingDefinition(namespace string, name string) *v1.Jaeger {
 		j.Spec.Collector.Image = otelCollectorImage
 		log.Infof("Using OTEL ingester for %s", name)
 		j.Spec.Ingester.Image = otelIngesterImage
-	}
-
-	if specifyOtelConfig {
 		j.Spec.Collector.Config = v1.NewFreeForm(getOtelConfigForHealthCheckPort("14269"))
 		j.Spec.Ingester.Config = v1.NewFreeForm(getOtelConfigForHealthCheckPort("14270"))
 	}
@@ -265,7 +262,7 @@ func jaegerStreamingDefinitionWithTLS(namespace string, name, kafkaUserName stri
 				Options: v1.NewOptions(ingesterOptions),
 			},
 			Storage: v1.JaegerStorageSpec{
-				Type: "elasticsearch",
+				Type: v1.JaegerESStorage,
 				Options: v1.NewOptions(map[string]interface{}{
 					"es.server-urls": esServerUrls,
 				}),
@@ -282,9 +279,7 @@ func jaegerStreamingDefinitionWithTLS(namespace string, name, kafkaUserName stri
 		j.Spec.Collector.Image = otelCollectorImage
 		log.Infof("Using OTEL ingester for %s", name)
 		j.Spec.Ingester.Image = otelIngesterImage
-	}
 
-	if specifyOtelConfig {
 		j.Spec.Collector.Config = v1.NewFreeForm(getOtelConfigForHealthCheckPort("14269"))
 		j.Spec.Ingester.Config = v1.NewFreeForm(getOtelConfigForHealthCheckPort("14270"))
 	}
@@ -310,7 +305,7 @@ func jaegerAutoProvisionedDefinition(namespace string, name string) *v1.Jaeger {
 			},
 			Strategy: v1.DeploymentStrategyStreaming,
 			Storage: v1.JaegerStorageSpec{
-				Type: "elasticsearch",
+				Type: v1.JaegerESStorage,
 				Options: v1.NewOptions(map[string]interface{}{
 					"es.server-urls": esServerUrls,
 				}),
@@ -323,9 +318,7 @@ func jaegerAutoProvisionedDefinition(namespace string, name string) *v1.Jaeger {
 		jaegerInstance.Spec.Collector.Image = otelCollectorImage
 		log.Infof("Using OTEL ingester for %s", name)
 		jaegerInstance.Spec.Ingester.Image = otelIngesterImage
-	}
 
-	if specifyOtelConfig {
 		jaegerInstance.Spec.Collector.Config = v1.NewFreeForm(getOtelConfigForHealthCheckPort("14269"))
 		jaegerInstance.Spec.Ingester.Config = v1.NewFreeForm(getOtelConfigForHealthCheckPort("14270"))
 	}

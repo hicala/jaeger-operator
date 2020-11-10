@@ -188,9 +188,10 @@ func (r *ReconcileJaeger) Reconcile(request reconcile.Request) (reconcile.Result
 		}
 	}
 
-	// update the status to "Ready"
-	if instance.Status.Phase != v1.JaegerPhaseRunning {
+	// set the status version to the updated instance version if versions doesn't match
+	if updated.Status.Version != originalInstance.Status.Version || instance.Status.Phase != v1.JaegerPhaseRunning {
 		instance.Status.Phase = v1.JaegerPhaseRunning
+		instance.Status.Version = updated.Status.Version
 		if err := r.client.Status().Update(ctx, instance); err != nil {
 			logFields.WithError(err).Error("failed to store the running status into the current CustomResource")
 			return reconcile.Result{}, tracing.HandleError(err, span)
@@ -254,7 +255,9 @@ func (r *ReconcileJaeger) apply(ctx context.Context, jaeger v1.Jaeger, str strat
 			}
 			return jaeger, tracing.HandleError(err, span)
 		}
-		es := &storage.ElasticsearchDeployment{Jaeger: &jaeger, CertScript: "./scripts/cert_generation.sh", Secrets: secrets.Items}
+		secretsForNamespace := r.getSecretsForNamespace(secrets.Items, jaeger.Namespace)
+
+		es := &storage.ElasticsearchDeployment{Jaeger: &jaeger, CertScript: "./scripts/cert_generation.sh", Secrets: secretsForNamespace}
 		err = es.CreateCerts()
 		if err != nil {
 			es.Jaeger.Logger().WithError(err).Error("failed to create Elasticsearch certificates, Elasticsearch won't be deployed")
@@ -361,4 +364,14 @@ func (r *ReconcileJaeger) apply(ctx context.Context, jaeger v1.Jaeger, str strat
 	}
 
 	return jaeger, nil
+}
+
+func (r ReconcileJaeger) getSecretsForNamespace(secrets []corev1.Secret, namespace string) []corev1.Secret {
+	var secretsForNamespace []corev1.Secret
+	for _, secret := range secrets {
+		if secret.Namespace == namespace {
+			secretsForNamespace = append(secretsForNamespace, secret)
+		}
+	}
+	return secretsForNamespace
 }

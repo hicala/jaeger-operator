@@ -15,6 +15,10 @@ type IngressSecurityType string
 // +k8s:openapi-gen=true
 type JaegerPhase string
 
+// JaegerStorageType represents the Jaeger storage type
+// +k8s:openapi-gen=true
+type JaegerStorageType string
+
 const (
 	// FlagPlatformKubernetes represents the value for the 'platform' flag for Kubernetes
 	// +k8s:openapi-gen=true
@@ -79,7 +83,46 @@ const (
 	// JaegerPhaseRunning indicates that the Jaeger instance is ready and running
 	// +k8s:openapi-gen=true
 	JaegerPhaseRunning JaegerPhase = "Running"
+
+	// JaegerMemoryStorage indicates that the Jaeger storage type is memory. This is the default storage type.
+	// +k8s:openapi-gen=true
+	JaegerMemoryStorage JaegerStorageType = "memory"
+
+	// JaegerCassandraStorage indicates that the Jaeger storage type is cassandra
+	// +k8s:openapi-gen=true
+	JaegerCassandraStorage JaegerStorageType = "cassandra"
+
+	// JaegerESStorage indicates that the Jaeger storage type is elasticsearch
+	// +k8s:openapi-gen=true
+	JaegerESStorage JaegerStorageType = "elasticsearch"
+
+	// JaegerKafkaStorage indicates that the Jaeger storage type is kafka
+	// +k8s:openapi-gen=true
+	JaegerKafkaStorage JaegerStorageType = "kafka"
+
+	// JaegerBadgerStorage indicates that the Jaeger storage type is badger
+	// +k8s:openapi-gen=true
+	JaegerBadgerStorage JaegerStorageType = "badger"
 )
+
+// ValidStorageTypes returns the list of valid storage types
+func ValidStorageTypes() []JaegerStorageType {
+	return []JaegerStorageType{
+		JaegerMemoryStorage,
+		JaegerCassandraStorage,
+		JaegerESStorage,
+		JaegerKafkaStorage,
+		JaegerBadgerStorage,
+	}
+}
+
+// OptionsPrefix returns the options prefix associated with the storage type
+func (storageType JaegerStorageType) OptionsPrefix() string {
+	if storageType == JaegerESStorage {
+		return "es"
+	}
+	return string(storageType)
+}
 
 // JaegerSpec defines the desired state of Jaeger
 // +k8s:openapi-gen=true
@@ -130,6 +173,7 @@ type JaegerStatus struct {
 
 // Jaeger is the Schema for the jaegers API
 // +k8s:openapi-gen=true
+// +operator-sdk:gen-csv:customresourcedefinitions.displayName="Jaeger"
 // +kubebuilder:subresource:status
 // +kubebuilder:printcolumn:name="Status",type="string",JSONPath=".status.phase",description="Jaeger instance's status"
 // +kubebuilder:printcolumn:name="Version",type="string",JSONPath=".status.version",description="Jaeger Version"
@@ -207,6 +251,12 @@ type JaegerQuerySpec struct {
 	// The default, if omitted, is ClusterIP.
 	// See https://kubernetes.io/docs/concepts/services-networking/service/#publishing-services-service-types
 	ServiceType v1.ServiceType `json:"serviceType,omitempty"`
+
+	// +optional
+	// TracingEnabled if set to false adds the JAEGER_DISABLED environment flag and removes the injected
+	// agent container from the query component to disable tracing requests to the query service.
+	// The default, if ommited, is true
+	TracingEnabled *bool `json:"tracingEnabled,omitempty"`
 }
 
 // JaegerUISpec defines the options to be used to configure the UI
@@ -297,6 +347,12 @@ type JaegerAllInOneSpec struct {
 
 	// +optional
 	JaegerCommonSpec `json:",inline,omitempty"`
+
+	// +optional
+	// TracingEnabled if set to false adds the JAEGER_DISABLED environment flag and removes the injected
+	// agent container from the query component to disable tracing requests to the query service.
+	// The default, if ommited, is true
+	TracingEnabled *bool `json:"tracingEnabled,omitempty"`
 }
 
 // AutoScaleSpec defines the common elements used for create HPAs
@@ -394,9 +450,8 @@ type JaegerAgentSpec struct {
 // JaegerStorageSpec defines the common storage options to be used for the query and collector
 // +k8s:openapi-gen=true
 type JaegerStorageSpec struct {
-	// Type can be `memory` (default), `cassandra`, `elasticsearch`, `kafka` or `badger`
 	// +optional
-	Type string `json:"type,omitempty"`
+	Type JaegerStorageType `json:"type,omitempty"`
 
 	// +optional
 	SecretName string `json:"secretName,omitempty"`

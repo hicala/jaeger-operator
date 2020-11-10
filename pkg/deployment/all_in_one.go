@@ -20,7 +20,6 @@ import (
 	"github.com/jaegertracing/jaeger-operator/pkg/config/tls"
 	configmap "github.com/jaegertracing/jaeger-operator/pkg/config/ui"
 	"github.com/jaegertracing/jaeger-operator/pkg/service"
-	"github.com/jaegertracing/jaeger-operator/pkg/storage"
 	"github.com/jaegertracing/jaeger-operator/pkg/util"
 )
 
@@ -42,7 +41,12 @@ func (a *AllInOne) Get() *appsv1.Deployment {
 
 	args := append(a.jaeger.Spec.AllInOne.Options.ToArgs())
 
-	adminPort := util.GetPort("--admin-http-port=", args, 14269)
+	adminPort := util.GetAdminPort(args, 14269)
+
+	jaegerDisabled := false
+	if a.jaeger.Spec.AllInOne.TracingEnabled != nil && *a.jaeger.Spec.AllInOne.TracingEnabled == false {
+		jaegerDisabled = true
+	}
 
 	baseCommonSpec := v1.JaegerCommonSpec{
 		Annotations: map[string]string{
@@ -57,7 +61,7 @@ func (a *AllInOne) Get() *appsv1.Deployment {
 	commonSpec := util.Merge([]v1.JaegerCommonSpec{a.jaeger.Spec.AllInOne.JaegerCommonSpec, a.jaeger.Spec.JaegerCommonSpec, baseCommonSpec})
 
 	options := allArgs(a.jaeger.Spec.AllInOne.Options,
-		a.jaeger.Spec.Storage.Options.Filter(storage.OptionsPrefix(a.jaeger.Spec.Storage.Type)))
+		a.jaeger.Spec.Storage.Options.Filter(a.jaeger.Spec.Storage.Type.OptionsPrefix()))
 
 	configmap.Update(a.jaeger, commonSpec, &options)
 	sampling.Update(a.jaeger, commonSpec, &options)
@@ -81,8 +85,8 @@ func (a *AllInOne) Get() *appsv1.Deployment {
 		a.jaeger.Logger().WithField("error", err).
 			WithField("component", "all-in-one").
 			Errorf("Could not parse OTEL config, config map will not be created")
-	} else if otelconfig.ShouldCreate(a.jaeger, a.jaeger.Spec.AllInOne.Options, otelConf) {
-		otelconfig.Update(a.jaeger, "all-in-one", commonSpec, &options)
+	} else {
+		otelconfig.Sync(a.jaeger, "all-in-one", a.jaeger.Spec.AllInOne.Options, otelConf, commonSpec, &options)
 	}
 
 	// ensure we have a consistent order of the arguments
@@ -135,11 +139,15 @@ func (a *AllInOne) Get() *appsv1.Deployment {
 						Env: []corev1.EnvVar{
 							{
 								Name:  "SPAN_STORAGE_TYPE",
-								Value: a.jaeger.Spec.Storage.Type,
+								Value: string(a.jaeger.Spec.Storage.Type),
 							},
 							{
 								Name:  "COLLECTOR_ZIPKIN_HTTP_PORT",
 								Value: "9411",
+							},
+							{
+								Name:  "JAEGER_DISABLED",
+								Value: strconv.FormatBool(jaegerDisabled),
 							},
 						},
 						VolumeMounts: commonSpec.VolumeMounts,

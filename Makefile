@@ -1,5 +1,8 @@
 VERSION_DATE ?= $(shell date -u +'%Y-%m-%dT%H:%M:%SZ')
-GO_FLAGS ?= GOOS=$(go env GOOS) GOARCH=$(go env GOARCH) CGO_ENABLED=0 GO111MODULE=on
+PLATFORMS ?= linux/arm64,linux/amd64,linux/s390x
+GOARCH ?= $(go env GOARCH)
+GOOS ?= $(go env GOOS)
+GO_FLAGS ?= GOOS=$(GOOS) GOARCH=$(GOARCH) CGO_ENABLED=0 GO111MODULE=on
 KUBERNETES_CONFIG ?= "$(HOME)/.kube/config"
 WATCH_NAMESPACE ?= ""
 BIN_DIR ?= "build/_output/bin"
@@ -9,6 +12,7 @@ FMT_LOG=fmt.log
 OPERATOR_NAME ?= jaeger-operator
 NAMESPACE ?= "$(USER)"
 BUILD_IMAGE ?= "$(NAMESPACE)/$(OPERATOR_NAME):latest"
+IMAGE_TAGS ?= "--tag $(BUILD_IMAGE)"
 OUTPUT_BINARY ?= "$(BIN_DIR)/$(OPERATOR_NAME)"
 VERSION_PKG ?= "github.com/jaegertracing/jaeger-operator/pkg/version"
 JAEGER_VERSION ?= "$(shell grep jaeger= versions.txt | awk -F= '{print $$2}')"
@@ -75,7 +79,11 @@ gobuild:
 
 .PHONY: docker
 docker:
-	@[ ! -z "$(PIPELINE)" ] || docker build --build-arg=GOPROXY=${GOPROXY} --file build/Dockerfile -t "$(BUILD_IMAGE)" .
+	@[ ! -z "$(PIPELINE)" ] || docker build --build-arg=GOPROXY=${GOPROXY} --build-arg=JAEGER_VERSION=${JAEGER_VERSION} --build-arg=TARGETARCH=$(GOARCH) --file build/Dockerfile -t "$(BUILD_IMAGE)" .
+
+.PHONY: dockerx
+dockerx:
+	@[ ! -z "$(PIPELINE)" ] || docker buildx build --push --progress=plain --build-arg=JAEGER_VERSION=${JAEGER_VERSION} --build-arg=GOPROXY=${GOPROXY} --platform=$(PLATFORMS) --file build/Dockerfile $(IMAGE_TAGS) .
 
 .PHONY: push
 push:
@@ -172,6 +180,19 @@ e2e-tests-examples-openshift: prepare-e2e-tests deploy-es-operator
 e2e-tests-autoscale: prepare-e2e-tests es kafka
 	@echo Running Autoscale end-to-end tests...
 	@STORAGE_NAMESPACE=$(STORAGE_NAMESPACE) KAFKA_NAMESPACE=$(KAFKA_NAMESPACE) go test -tags=autoscale ./test/e2e/... $(TEST_OPTIONS)
+
+.PHONY: e2e-tests-multi-instance
+e2e-tests-multi-instance: prepare-e2e-tests es kafka
+	@echo Running Multiple Instance end-to-end tests...
+	@STORAGE_NAMESPACE=$(STORAGE_NAMESPACE) KAFKA_NAMESPACE=$(KAFKA_NAMESPACE) go test -tags=multiple ./test/e2e/... $(TEST_OPTIONS)
+
+.PHONY: e2e-tests-upgrade
+e2e-tests-upgrade: prepare-e2e-tests
+	@echo Prepare next version image...
+	@[ ! -z "$(PIPELINE)" ] || docker build --build-arg=GOPROXY=${GOPROXY}  --build-arg=JAEGER_VERSION=$(shell .ci/get_test_upgrade_version.sh ${JAEGER_VERSION}) --file build/Dockerfile -t "$(NAMESPACE)/$(OPERATOR_NAME):next" .
+	BUILD_IMAGE="$(NAMESPACE)/$(OPERATOR_NAME):next" $(MAKE) push
+	@echo Running Upgrade end-to-end tests...
+	UPGRADE_TEST_VERSION=$(shell .ci/get_test_upgrade_version.sh ${JAEGER_VERSION}) go test -tags=upgrade  ./test/e2e/... $(TEST_OPTIONS)
 
 .PHONY: run
 run: crd

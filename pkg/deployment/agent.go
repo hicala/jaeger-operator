@@ -58,7 +58,7 @@ func (a *Agent) Get() *appsv1.DaemonSet {
 	configRest := util.GetPort("--http-server.host-port=", args, 5778)
 	jgCompactTrft := util.GetPort("--processor.jaeger-compact.server-host-port=", args, 6831)
 	jgBinaryTrft := util.GetPort("--processor.jaeger-binary.server-host-port=", args, 6832)
-	adminPort := util.GetPort("--admin-http-port=", args, 14271)
+	adminPort := util.GetAdminPort(args, 14271)
 
 	trueVar := true
 	falseVar := false
@@ -84,8 +84,8 @@ func (a *Agent) Get() *appsv1.DaemonSet {
 		a.jaeger.Logger().WithField("error", err).
 			WithField("component", "agent").
 			Errorf("Could not parse OTEL config, config map will not be created")
-	} else if otelconfig.ShouldCreate(a.jaeger, a.jaeger.Spec.Agent.Options, otelConf) {
-		otelconfig.Update(a.jaeger, "agent", commonSpec, &args)
+	} else {
+		otelconfig.Sync(a.jaeger, "agent", a.jaeger.Spec.Agent.Options, otelConf, commonSpec, &args)
 	}
 
 	// ensure we have a consistent order of the arguments

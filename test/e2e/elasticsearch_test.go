@@ -71,7 +71,7 @@ func (suite *ElasticSearchTestSuite) AfterTest(suiteName, testName string) {
 
 func (suite *ElasticSearchTestSuite) TestSparkDependenciesES() {
 	storage := v1.JaegerStorageSpec{
-		Type: "elasticsearch",
+		Type: v1.JaegerESStorage,
 		Options: v1.NewOptions(map[string]interface{}{
 			"es.server-urls": esServerUrls,
 		}),
@@ -81,7 +81,7 @@ func (suite *ElasticSearchTestSuite) TestSparkDependenciesES() {
 }
 
 func (suite *ElasticSearchTestSuite) TestSimpleProd() {
-	err := WaitForStatefulset(t, fw.KubeClient, storageNamespace, "elasticsearch", retryInterval, timeout)
+	err := WaitForStatefulset(t, fw.KubeClient, storageNamespace, string(v1.JaegerESStorage), retryInterval, timeout)
 	require.NoError(t, err, "Error waiting for elasticsearch")
 
 	// create jaeger custom resource
@@ -177,7 +177,7 @@ func getJaegerSimpleProdWithServerUrls(name string) *v1.Jaeger {
 			},
 			Strategy: v1.DeploymentStrategyProduction,
 			Storage: v1.JaegerStorageSpec{
-				Type: "elasticsearch",
+				Type: v1.JaegerESStorage,
 				Options: v1.NewOptions(map[string]interface{}{
 					"es.server-urls": esServerUrls,
 				}),
@@ -188,9 +188,6 @@ func getJaegerSimpleProdWithServerUrls(name string) *v1.Jaeger {
 	if specifyOtelImages {
 		logrus.Infof("Using OTEL collector for %s", name)
 		exampleJaeger.Spec.Collector.Image = otelCollectorImage
-	}
-
-	if specifyOtelConfig {
 		exampleJaeger.Spec.Collector.Config = v1.NewFreeForm(getOtelConfigForHealthCheckPort("14269"))
 	}
 
@@ -216,7 +213,7 @@ func getJaegerAllInOne(name string) *v1.Jaeger {
 			},
 			Strategy: v1.DeploymentStrategyAllInOne,
 			Storage: v1.JaegerStorageSpec{
-				Type: "elasticsearch",
+				Type: v1.JaegerESStorage,
 				Options: v1.NewOptions(map[string]interface{}{
 					"es.server-urls": esServerUrls,
 				}),
@@ -250,7 +247,7 @@ func hasIndexWithPrefix(prefix string, esPort string) (bool, error) {
 }
 
 func createEsPortForward() (portForwES *portforward.PortForwarder, closeChanES chan struct{}, esPort string) {
-	portForwES, closeChanES = CreatePortForward(storageNamespace, "elasticsearch", "elasticsearch", []string{"0:9200"}, fw.KubeConfig)
+	portForwES, closeChanES = CreatePortForward(storageNamespace, string(v1.JaegerESStorage), string(v1.JaegerESStorage), []string{"0:9200"}, fw.KubeConfig)
 	forwardedPorts, err := portForwES.GetPorts()
 	require.NoError(t, err)
 	return portForwES, closeChanES, strconv.Itoa(int(forwardedPorts[0].Local))

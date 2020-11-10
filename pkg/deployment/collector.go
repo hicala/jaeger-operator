@@ -19,7 +19,6 @@ import (
 	"github.com/jaegertracing/jaeger-operator/pkg/config/sampling"
 	"github.com/jaegertracing/jaeger-operator/pkg/config/tls"
 	"github.com/jaegertracing/jaeger-operator/pkg/service"
-	"github.com/jaegertracing/jaeger-operator/pkg/storage"
 	"github.com/jaegertracing/jaeger-operator/pkg/util"
 )
 
@@ -43,7 +42,7 @@ func (c *Collector) Get() *appsv1.Deployment {
 
 	args := append(c.jaeger.Spec.Collector.Options.ToArgs())
 
-	adminPort := util.GetPort("--admin-http-port=", args, 14269)
+	adminPort := util.GetAdminPort(args, 14269)
 
 	baseCommonSpec := v1.JaegerCommonSpec{
 		Annotations: map[string]string{
@@ -72,10 +71,10 @@ func (c *Collector) Get() *appsv1.Deployment {
 	// If strategy is DeploymentStrategyStreaming, then change storage type
 	// to Kafka, and the storage options will be used in the Ingester instead
 	if c.jaeger.Spec.Strategy == v1.DeploymentStrategyStreaming {
-		storageType = "kafka"
+		storageType = v1.JaegerKafkaStorage
 	}
 	options := allArgs(c.jaeger.Spec.Collector.Options,
-		c.jaeger.Spec.Storage.Options.Filter(storage.OptionsPrefix(storageType)))
+		c.jaeger.Spec.Storage.Options.Filter(storageType.OptionsPrefix()))
 
 	sampling.Update(c.jaeger, commonSpec, &options)
 	tls.Update(c.jaeger, commonSpec, &options)
@@ -86,8 +85,8 @@ func (c *Collector) Get() *appsv1.Deployment {
 		c.jaeger.Logger().WithField("error", err).
 			WithField("component", "collector").
 			Errorf("Could not parse OTEL config, config map will not be created")
-	} else if otelconfig.ShouldCreate(c.jaeger, c.jaeger.Spec.Collector.Options, otelConf) {
-		otelconfig.Update(c.jaeger, "collector", commonSpec, &options)
+	} else {
+		otelconfig.Sync(c.jaeger, "collector", c.jaeger.Spec.Collector.Options, otelConf, commonSpec, &options)
 	}
 
 	// ensure we have a consistent order of the arguments
@@ -130,7 +129,7 @@ func (c *Collector) Get() *appsv1.Deployment {
 						Env: []corev1.EnvVar{
 							{
 								Name:  "SPAN_STORAGE_TYPE",
-								Value: storageType,
+								Value: string(storageType),
 							},
 							{
 								Name:  "COLLECTOR_ZIPKIN_HTTP_PORT",

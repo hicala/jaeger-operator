@@ -124,7 +124,7 @@ func TestStreamingOptionsArePassed(t *testing.T) {
 				}),
 			},
 			Storage: v1.JaegerStorageSpec{
-				Type: "elasticsearch",
+				Type: v1.JaegerESStorage,
 				Options: v1.NewOptions(map[string]interface{}{
 					"es.server-urls": "http://elasticsearch.default.svc:9200",
 					"es.username":    "elastic",
@@ -245,6 +245,18 @@ func TestAgentSidecarIsInjectedIntoQueryForStreaming(t *testing.T) {
 		if strings.HasSuffix(dep.Name, "-query") {
 			assert.Equal(t, 2, len(dep.Spec.Template.Spec.Containers))
 			assert.Equal(t, "jaeger-agent", dep.Spec.Template.Spec.Containers[1].Name)
+		}
+	}
+}
+
+func TestAgentSidecarNotInjectedTracingEnabledFalseForStreaming(t *testing.T) {
+	j := v1.NewJaeger(types.NamespacedName{Name: "TestAgentSidecarNotInjectedTracingEnabledFalseForStreaming"})
+	falseVar := false
+	j.Spec.Query.TracingEnabled = &falseVar
+	c := newStreamingStrategy(context.Background(), j)
+	for _, dep := range c.Deployments() {
+		if strings.HasSuffix(dep.Name, "-query") {
+			assert.Equal(t, 1, len(dep.Spec.Template.Spec.Containers))
 		}
 	}
 }

@@ -133,7 +133,7 @@ func getJaegerSelfProvisionedESAndKafka(instanceName string) *v1.Jaeger {
 			},
 			Strategy: v1.DeploymentStrategyStreaming,
 			Storage: v1.JaegerStorageSpec{
-				Type: "elasticsearch",
+				Type: v1.JaegerESStorage,
 				Elasticsearch: v1.ElasticsearchSpec{
 					NodeCount: 1,
 					Resources: &corev1.ResourceRequirements{
@@ -148,11 +148,7 @@ func getJaegerSelfProvisionedESAndKafka(instanceName string) *v1.Jaeger {
 	if specifyOtelImages {
 		logrus.Infof("Using OTEL collector for %s", instanceName)
 		jaegerInstance.Spec.Collector.Image = otelCollectorImage
-	}
-
-	if specifyOtelConfig {
 		jaegerInstance.Spec.Collector.Config = v1.NewFreeForm(getOtelConfigForHealthCheckPort("14269"))
-
 	}
 
 	return jaegerInstance

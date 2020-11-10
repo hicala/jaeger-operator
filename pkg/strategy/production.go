@@ -2,7 +2,6 @@ package strategy
 
 import (
 	"context"
-	"strings"
 
 	corev1 "k8s.io/api/core/v1"
 
@@ -112,7 +111,7 @@ func newProductionStrategy(ctx context.Context, jaeger *v1.Jaeger) S {
 
 	var indexCleaner *batchv1beta1.CronJob
 	if isBoolTrue(jaeger.Spec.Storage.EsIndexCleaner.Enabled) {
-		if strings.EqualFold(jaeger.Spec.Storage.Type, "elasticsearch") {
+		if jaeger.Spec.Storage.Type == v1.JaegerESStorage {
 			indexCleaner = cronjob.CreateEsIndexCleaner(jaeger)
 		} else {
 			jaeger.Logger().WithField("type", jaeger.Spec.Storage.Type).Warn("Skipping Elasticsearch index cleaner job due to unsupported storage.")
@@ -126,7 +125,10 @@ func newProductionStrategy(ctx context.Context, jaeger *v1.Jaeger) S {
 
 	// prepare the deployments, which may get changed by the elasticsearch routine
 	cDep := collector.Get()
-	queryDep := inject.Sidecar(jaeger, inject.OAuthProxy(jaeger, query.Get()))
+	queryDep := inject.OAuthProxy(jaeger, query.Get())
+	if jaeger.Spec.Query.TracingEnabled == nil || *jaeger.Spec.Query.TracingEnabled == true {
+		queryDep = inject.Sidecar(jaeger, queryDep)
+	}
 	c.dependencies = storage.Dependencies(jaeger)
 
 	// assembles the pieces for an elasticsearch self-provisioned deployment via the elasticsearch operator
